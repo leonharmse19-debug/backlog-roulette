@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backlog Roulette</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Backlog Roulette</h1>
+      <p class="lead">Spin the wheel to pick a game from your backlog.</p>
+    </header>
+
+    <main>
+      <section aria-labelledby="wheel-heading" class="wheel-section">
+        <h2 id="wheel-heading">Roulette Wheel</h2>
+        <div class="canvas-wrap">
+          <canvas id="wheel" width="600" height="600" role="img" aria-label="Game selection wheel">
+            Your browser does not support the HTML5 Canvas element.
+          </canvas>
+          <div id="wheelMarker" aria-hidden="true"></div>
+        </div>
+        <div class="controls">
+          <button id="spin" type="button">Spin</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="manage-heading" class="manage-section">
+        <h2 id="manage-heading">Manage Games</h2>
+        <form id="add-form" aria-describedby="add-desc">
+          <p id="add-desc">Type a game title and press Add to include it in the wheel.</p>
+          <label for="game-input" class="visually-hidden">Game title</label>
+          <input id="game-input" name="game" type="text" placeholder="e.g. Hades" required />
+          <button id="add-game" type="submit">Add</button>
+        </form>
+
+        <div class="list-wrap">
+          <h3>Games</h3>
+          <ul id="game-list" aria-live="polite"></ul>
+        </div>
+      </section>
+
+      <!-- Winner modal (hidden until a spin finishes) -->
+      <div id="winnerModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
+        <div class="modal-content" role="document">
+          <h2 id="winnerTitle">Winner</h2>
+          <img id="winnerImage" src="" alt="" />
+          <div class="modal-actions">
+            <button id="closeModal" type="button">Close</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <p>Built with HTML5, Canvas, and a little luck.</p>
+    </footer>
+
+    <script src="script.js" defer></script>
+  </body>
+</html>
