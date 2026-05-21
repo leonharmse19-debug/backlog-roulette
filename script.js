@@ -201,7 +201,7 @@
     const min = 8; const max = 14;
     const dir = (Math.random() > 0.5) ? 1 : -1;
     spinInitVel = (Math.random() * (max - min) + min) * dir;
-    spinDuration = Math.random() * (15 - 10) + 10; // seconds
+    spinDuration = Math.random() * (40 - 30) + 30; // seconds (30-40s)
     spinStart = null;
     lastTime = 0;
     animId = requestAnimationFrame((ts)=>{ spinStart = ts; animate(ts); });
