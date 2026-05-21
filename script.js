@@ -39,6 +39,11 @@
 	let animId = null;
 	let lastTime = 0;
 
+	// spin timing for deterministic duration-based slowdown
+	let spinStart = null; // timestamp when spin started
+	let spinDuration = 0; // seconds
+	let spinInitVel = 0; // initial angular velocity (radians/sec)
+
 	function resizeCanvas(){
 		const dpr = window.devicePixelRatio || 1;
 		const rect = canvas.getBoundingClientRect();
@@ -48,30 +53,52 @@
 		draw();
 	}
 
-	function draw(){
-		if(!ctx) return;
-		const rect = canvas.getBoundingClientRect();
-		const w = rect.width;
-		const h = rect.height;
-		const cx = w/2;
-		const cy = h/2;
-		const radius = Math.min(w,h)/2 - 8;
+	function animate(ts){
+		if(!lastTime) lastTime = ts;
+		const dt = Math.min(0.05, (ts - lastTime)/1000); // cap delta
+		lastTime = ts;
 
-		ctx.clearRect(0,0,w,h);
+		// If a timed spin is active, drive angularVelocity by elapsed/time decay
+		if(spinStart !== null){
+			const elapsed = (ts - spinStart) / 1000; // seconds
+			if(elapsed < spinDuration){
+				// exponential decay from spinInitVel to a small final velocity
+				const finalAbs = 0.02; // target final magnitude (rad/s)
+				const ratio = finalAbs / Math.max(1e-6, Math.abs(spinInitVel));
+				const decay = Math.pow(ratio, elapsed / spinDuration);
+				angularVelocity = spinInitVel * decay;
+				rotation += angularVelocity * dt;
+				draw();
+				animId = requestAnimationFrame(animate);
+				return;
+			} else {
+				// spin finished
+				angularVelocity = 0;
+				spinStart = null;
+				animId = null;
+				// final draw to ensure wheel shows final position
+				draw();
+				const winner = computeWinner();
+				if(winner != null) announceWinner(winner);
+				return;
+			}
+		}
 
-		const n = Math.max(1,games.length);
-		const slice = Math.PI * 2 / n;
-
-		ctx.save();
-		ctx.translate(cx,cy);
-		ctx.rotate(rotation);
-
-		for(let i=0;i<n;i++){
-			const start = i * slice;
-			const end = start + slice;
-
-			// fill
-			ctx.beginPath();
+		// fallback friction behaviour (if any free-spinning remains)
+		if(Math.abs(angularVelocity) > 0.02){
+			rotation += angularVelocity * dt;
+			angularVelocity *= Math.pow(0.985, dt*60);
+			draw();
+			animId = requestAnimationFrame(animate);
+		} else if(animId){
+			// stop cleanly if animation was running but velocity is negligible
+			angularVelocity = 0;
+			animId = null;
+			draw();
+			const winner = computeWinner();
+			if(winner != null) announceWinner(winner);
+		}
+	}
 			ctx.moveTo(0,0);
 			ctx.arc(0,0,radius,start,end);
 			ctx.closePath();
@@ -194,9 +221,17 @@
 		// random initial velocity (radians/sec)
 		const min = 8; // lower bound
 		const max = 14; // upper bound
-		angularVelocity = (Math.random() * (max - min) + min) * (Math.random() > 0.5 ? 1 : -1);
+		const dir = (Math.random() > 0.5) ? 1 : -1;
+		spinInitVel = (Math.random() * (max - min) + min) * dir;
+		// choose total spin time between 10 and 15 seconds
+		spinDuration = Math.random() * (15 - 10) + 10;
+		spinStart = null; // will be set on first animation frame
 		lastTime = 0;
-		animId = requestAnimationFrame(animate);
+		animId = requestAnimationFrame((ts)=>{
+			// initialize spinStart on first frame then call animate normally
+			spinStart = ts;
+			animate(ts);
+		});
 	}
 
 	function addGame(title){
