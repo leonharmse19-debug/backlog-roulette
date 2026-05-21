@@ -169,7 +169,6 @@
 		winnerModal.setAttribute('aria-hidden','false');
 		// focus close button for keyboard users
 		if(closeModal) closeModal.focus();
-		// subtle entrance animation
 		const content = winnerModal.querySelector('.modal-content');
 		if(content) content.animate([
 			{ transform: 'translateY(8px)', opacity: 0 },
