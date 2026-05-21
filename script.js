@@ -1,403 +1,277 @@
 // Backlog Roulette - wheel drawing, spin animation, and UI bindings
 (function(){
-	const defaults = ['Witcher 3','Cyberpunk','Hades','Hollow Knight','Elden Ring','Stardew Valley'];
-	// Load saved games from localStorage if available, otherwise use defaults
-	let games;
-	try{
-		const saved = localStorage.getItem('backlogGames');
-		if(saved){
-			const parsed = JSON.parse(saved);
-			games = Array.isArray(parsed) ? parsed : [...defaults];
-		} else {
-			games = [...defaults];
-		}
-	} catch(e){
-		games = [...defaults];
-	}
+  const defaults = ['Witcher 3','Cyberpunk','Hades','Hollow Knight','Elden Ring','Stardew Valley'];
 
-	const canvas = document.getElementById('wheel');
-	const ctx = canvas.getContext('2d');
-	const spinBtn = document.getElementById('spin');
-	const addForm = document.getElementById('add-form');
-	const input = document.getElementById('game-input');
-	const gameList = document.getElementById('game-list');
-	const winnerModal = document.getElementById('winnerModal');
-	const winnerTitle = document.getElementById('winnerTitle');
-	const winnerImage = document.getElementById('winnerImage');
-	const closeModal = document.getElementById('closeModal');
+  // load saved games from localStorage
+  let games;
+  try{
+    const saved = localStorage.getItem('backlogGames');
+    if(saved){
+      const parsed = JSON.parse(saved);
+      games = Array.isArray(parsed) ? parsed : [...defaults];
+    } else {
+      games = [...defaults];
+    }
+  } catch(e){
+    games = [...defaults];
+  }
 
-	// visual palette (alternating)
-	const palette = [
-		'#8a2be2',
-		'#00e6d8',
-		'#5b2fa6',
-		'#00b3a0'
-	];
+  const canvas = document.getElementById('wheel');
+  const ctx = canvas ? canvas.getContext('2d') : null;
+  const spinBtn = document.getElementById('spin');
+  const addForm = document.getElementById('add-form');
+  const input = document.getElementById('game-input');
+  const gameList = document.getElementById('game-list');
+  const winnerModal = document.getElementById('winnerModal');
+  const winnerTitle = document.getElementById('winnerTitle');
+  const winnerImage = document.getElementById('winnerImage');
+  const closeModal = document.getElementById('closeModal');
 
-	let rotation = 0; // radians
-	let angularVelocity = 0; // radians/sec
-	let animId = null;
-	let lastTime = 0;
+  const palette = ['#8a2be2','#00e6d8','#5b2fa6','#00b3a0'];
 
-	// spin timing for deterministic duration-based slowdown
-	let spinStart = null; // timestamp when spin started
-	let spinDuration = 0; // seconds
-	let spinInitVel = 0; // initial angular velocity (radians/sec)
+  let rotation = 0;
+  let angularVelocity = 0;
+  let animId = null;
+  let lastTime = 0;
 
-	function resizeCanvas(){
-		const dpr = window.devicePixelRatio || 1;
-		const rect = canvas.getBoundingClientRect();
-		canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-		canvas.height = Math.max(1, Math.floor(rect.width * dpr));
-		ctx.setTransform(dpr,0,0,dpr,0,0);
-		draw();
-	}
+  // timed spin variables
+  let spinStart = null;
+  let spinDuration = 0;
+  let spinInitVel = 0;
 
-	function animate(ts){
-		if(!lastTime) lastTime = ts;
-		const dt = Math.min(0.05, (ts - lastTime)/1000); // cap delta
-		lastTime = ts;
+  function resizeCanvas(){
+    if(!canvas || !ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.width * dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
 
-		// If a timed spin is active, drive angularVelocity by elapsed/time decay
-		if(spinStart !== null){
-			const elapsed = (ts - spinStart) / 1000; // seconds
-			if(elapsed < spinDuration){
-				// exponential decay from spinInitVel to a small final velocity
-				const finalAbs = 0.02; // target final magnitude (rad/s)
-				const ratio = finalAbs / Math.max(1e-6, Math.abs(spinInitVel));
-				const decay = Math.pow(ratio, elapsed / spinDuration);
-				angularVelocity = spinInitVel * decay;
-				rotation += angularVelocity * dt;
-				draw();
-				animId = requestAnimationFrame(animate);
-				return;
-			} else {
-				// spin finished
-				angularVelocity = 0;
-				spinStart = null;
-				animId = null;
-				// final draw to ensure wheel shows final position
-				draw();
-				const winner = computeWinner();
-				if(winner != null) announceWinner(winner);
-				return;
-			}
-		}
+  function draw(){
+    if(!ctx || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    const cx = w/2;
+    const cy = h/2;
+    const radius = Math.min(w,h)/2 - 8;
 
-		// fallback friction behaviour (if any free-spinning remains)
-		if(Math.abs(angularVelocity) > 0.02){
-			rotation += angularVelocity * dt;
-			angularVelocity *= Math.pow(0.985, dt*60);
-			draw();
-			animId = requestAnimationFrame(animate);
-		} else if(animId){
-			// stop cleanly if animation was running but velocity is negligible
-			angularVelocity = 0;
-			animId = null;
-			draw();
-			const winner = computeWinner();
-			if(winner != null) announceWinner(winner);
-		}
-	}
-			ctx.moveTo(0,0);
-			ctx.arc(0,0,radius,start,end);
-			ctx.closePath();
-			const color = palette[i % palette.length];
-			// subtle gradient for neon feel
-			const g = ctx.createLinearGradient(
-				Math.cos((start+end)/2)*radius*0.2,
-				Math.sin((start+end)/2)*radius*0.2,
-				Math.cos((start+end)/2)*radius,
-				Math.sin((start+end)/2)*radius
-			);
-			g.addColorStop(0, shadeColor(color, -12));
-			g.addColorStop(1, color);
-			ctx.fillStyle = g;
-			ctx.fill();
+    ctx.clearRect(0,0,w,h);
 
-			// slice border
-			ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-			ctx.lineWidth = 1;
-			ctx.stroke();
+    const n = Math.max(1,games.length);
+    const slice = Math.PI * 2 / n;
 
-			// label
-			ctx.save();
-			const mid = start + slice/2;
-			ctx.rotate(mid);
-			ctx.translate(radius * 0.65, 0);
-			ctx.rotate(Math.PI/2);
-			ctx.fillStyle = 'rgba(8,10,12,0.95)';
-			ctx.font = '600 14px Inter, system-ui, sans-serif';
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			const label = games[i] || '';
-			wrapText(ctx, label, 0, 0, radius*0.5, 14);
-			ctx.restore();
-		}
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(rotation);
 
-		ctx.restore();
+    for(let i=0;i<n;i++){
+      const start = i * slice;
+      const end = start + slice;
 
-		// center hub
-		ctx.beginPath();
-		ctx.arc(cx,cy,Math.max(20, radius*0.12),0,Math.PI*2);
-		ctx.fillStyle = 'rgba(0,0,0,0.5)';
-		ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0,0,radius,start,end);
+      ctx.closePath();
 
-		// pointer (top)
-		ctx.beginPath();
-		ctx.moveTo(cx - 12, cy - radius - 6);
-		ctx.lineTo(cx + 12, cy - radius - 6);
-		ctx.lineTo(cx, cy - radius + 18);
-		ctx.closePath();
-		ctx.fillStyle = 'rgba(255,255,255,0.06)';
-		ctx.fill();
-		ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-		ctx.stroke();
-	}
+      const color = palette[i % palette.length];
+      const g = ctx.createLinearGradient(
+        Math.cos((start+end)/2)*radius*0.2,
+        Math.sin((start+end)/2)*radius*0.2,
+        Math.cos((start+end)/2)*radius,
+        Math.sin((start+end)/2)*radius
+      );
+      g.addColorStop(0, shadeColor(color, -12));
+      g.addColorStop(1, color);
+      ctx.fillStyle = g;
+      ctx.fill();
 
-	function animate(ts){
-		if(!lastTime) lastTime = ts;
-		const dt = Math.min(0.05, (ts - lastTime)/1000); // cap delta
-		lastTime = ts;
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
-		// improved friction model: steady exponential decay, stop when slow enough
-		if(Math.abs(angularVelocity) > 0.02){
-			rotation += angularVelocity * dt;
-			// slightly stronger decay for a satisfying stop
-			angularVelocity *= Math.pow(0.985, dt*60);
-		} else {
-			// when slow, stop cleanly and determine the winner from final rotation
-			rotation += angularVelocity * dt; // final nudge
-			angularVelocity = 0;
-			cancelAnimationFrame(animId);
-			animId = null;
-			const winner = computeWinner();
-			if(winner != null) announceWinner(winner);
-			return;
-		}
+      ctx.save();
+      const mid = start + slice/2;
+      ctx.rotate(mid);
+      ctx.translate(radius * 0.65, 0);
+      ctx.rotate(Math.PI/2);
+      ctx.fillStyle = 'rgba(8,10,12,0.95)';
+      ctx.font = '600 14px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const label = games[i] || '';
+      wrapText(ctx, label, 0, 0, radius*0.5, 14);
+      ctx.restore();
+    }
 
-		draw();
-		animId = requestAnimationFrame(animate);
-	}
+    ctx.restore();
 
-	function computeWinner(){
-		if(games.length === 0) return null;
-		const n = games.length;
-		const slice = Math.PI*2 / n;
-		// The canvas pointer sits at the top-center. In canvas coordinates that angle is 270deg (3*PI/2).
-		const pointerCanvasAngle = 1.5 * Math.PI; // 3 * PI / 2
-		// Convert the canvas pointer angle into wheel-local angle by subtracting the wheel rotation
-		let wheelAngle = pointerCanvasAngle - rotation;
-		// Normalize to [0, 2PI)
-		wheelAngle = ((wheelAngle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
-		const index = Math.floor(wheelAngle / slice) % n;
-		return games[index];
-	}
+    // center hub
+    ctx.beginPath();
+    ctx.arc(cx,cy,Math.max(20, radius*0.12),0,Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fill();
 
-	function announceWinner(name){
-		if(!winnerModal) return;
-		winnerTitle.textContent = name || '—';
-		// use placehold.co to create a reliable dark-themed banner with the game's name
-		const label = encodeURIComponent(name || 'Winner');
-		// 640x360 dark background (#1a1a2e) with white text
-		winnerImage.src = `https://placehold.co/640x360/1a1a2e/ffffff?text=${label}`;
-		winnerImage.alt = name || 'Winner';
-		// show modal
-		winnerModal.classList.add('open');
-		winnerModal.style.display = 'flex';
-		winnerModal.setAttribute('aria-hidden','false');
-		// focus close button for keyboard users
-		if(closeModal) closeModal.focus();
-		const content = winnerModal.querySelector('.modal-content');
-		if(content) content.animate([
-			{ transform: 'translateY(8px)', opacity: 0 },
-			{ transform: 'translateY(0)', opacity: 1 }
-		], { duration: 360, easing: 'cubic-bezier(.2,.9,.2,1)' });
-	}
+    // pointer
+    ctx.beginPath();
+    ctx.moveTo(cx - 12, cy - radius - 6);
+    ctx.lineTo(cx + 12, cy - radius - 6);
+    ctx.lineTo(cx, cy - radius + 18);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.stroke();
+  }
 
-	function spin(){
-		if(animId) return; // already spinning
-		if(games.length === 0) return;
-		// random initial velocity (radians/sec)
-		const min = 8; // lower bound
-		const max = 14; // upper bound
-		const dir = (Math.random() > 0.5) ? 1 : -1;
-		spinInitVel = (Math.random() * (max - min) + min) * dir;
-		// choose total spin time between 10 and 15 seconds
-		spinDuration = Math.random() * (15 - 10) + 10;
-		spinStart = null; // will be set on first animation frame
-		lastTime = 0;
-		animId = requestAnimationFrame((ts)=>{
-			// initialize spinStart on first frame then call animate normally
-			spinStart = ts;
-			animate(ts);
-		});
-	}
+  function animate(ts){
+    if(!lastTime) lastTime = ts;
+    const dt = Math.min(0.05, (ts - lastTime)/1000);
+    lastTime = ts;
 
-	function addGame(title){
-		const t = (title||'').trim();
-		if(!t) return;
-		games.push(t);
-		renderList();
-		draw();
-		input.value = '';
-		input.focus();
-		// persist new game
-		saveGames();
-	}
+    if(spinStart !== null){
+      const elapsed = (ts - spinStart) / 1000;
+      if(elapsed < spinDuration){
+        const finalAbs = 0.02;
+        const ratio = finalAbs / Math.max(1e-6, Math.abs(spinInitVel));
+        const decay = Math.pow(ratio, elapsed / spinDuration);
+        angularVelocity = spinInitVel * decay;
+        rotation += angularVelocity * dt;
+        draw();
+        animId = requestAnimationFrame(animate);
+        return;
+      } else {
+        angularVelocity = 0;
+        spinStart = null;
+        animId = null;
+        draw();
+        const winner = computeWinner();
+        if(winner != null) announceWinner(winner);
+        return;
+      }
+    }
 
-	function renderList(){
-		gameList.innerHTML = '';
-		games.forEach((g,i)=>{
-			const li = document.createElement('li');
-			li.textContent = g;
-			const remove = document.createElement('button');
-			remove.textContent = '✕';
-			remove.title = 'Remove';
-			remove.style.marginLeft = '8px';
-			remove.addEventListener('click', ()=>{
-				games.splice(i,1);
-				renderList();
-				draw();
-				// persist removal
-				saveGames();
-			});
-			li.appendChild(remove);
-			gameList.appendChild(li);
-		});
-	}
+    if(Math.abs(angularVelocity) > 0.02){
+      rotation += angularVelocity * dt;
+      angularVelocity *= Math.pow(0.985, dt*60);
+      draw();
+      animId = requestAnimationFrame(animate);
+    } else if(animId){
+      angularVelocity = 0;
+      animId = null;
+      draw();
+      const winner = computeWinner();
+      if(winner != null) announceWinner(winner);
+    }
+  }
 
-	// persist games array to localStorage
-	function saveGames(){
-		try{
-			localStorage.setItem('backlogGames', JSON.stringify(games));
-		}catch(e){
-			// ignore storage errors (e.g., quota or disabled)
-		}
-	}
+  function computeWinner(){
+    if(games.length === 0) return null;
+    const n = games.length;
+    const slice = Math.PI*2 / n;
+    const pointerCanvasAngle = 1.5 * Math.PI;
+    let wheelAngle = pointerCanvasAngle - rotation;
+    wheelAngle = ((wheelAngle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    const index = Math.floor(wheelAngle / slice) % n;
+    return games[index];
+  }
 
-	// export games as JSON file for cross-PC transfer
-	function exportGames(){
-		try{
-			const data = JSON.stringify(games, null, 2);
-			const blob = new Blob([data], { type: 'application/json' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = 'backlog-games.json';
-			document.body.appendChild(a);
-			a.click();
-			a.remove();
-			URL.revokeObjectURL(url);
-		} catch(e){
-			console.warn('Export failed', e);
-		}
-	}
+  function announceWinner(name){
+    if(!winnerModal) return;
+    winnerTitle.textContent = name || '—';
+    const label = encodeURIComponent(name || 'Winner');
+    winnerImage.src = `https://placehold.co/640x360/1a1a2e/ffffff?text=${label}`;
+    winnerImage.alt = name || 'Winner';
+    winnerModal.classList.add('open');
+    winnerModal.style.display = 'flex';
+    winnerModal.setAttribute('aria-hidden','false');
+    if(closeModal) closeModal.focus();
+    const content = winnerModal.querySelector('.modal-content');
+    if(content) content.animate([
+      { transform: 'translateY(8px)', opacity: 0 },
+      { transform: 'translateY(0)', opacity: 1 }
+    ], { duration: 360, easing: 'cubic-bezier(.2,.9,.2,1)' });
+  }
 
-	// import games from a JSON file (replaces current list)
-	function importGamesFromFile(file){
-		if(!file) return;
-		const reader = new FileReader();
-		reader.onload = function(e){
-			try{
-				const parsed = JSON.parse(String(e.target.result));
-				if(Array.isArray(parsed)){
-					games = parsed.slice();
-					saveGames();
-					renderList();
-					draw();
-				} else {
-					alert('Invalid file format: expected a JSON array of game titles.');
-				}
-			} catch(err){
-				alert('Failed to read file: ' + (err && err.message ? err.message : 'unknown'));
-			}
-		};
-		reader.readAsText(file);
-	}
+  function spin(){
+    if(animId) return;
+    if(games.length === 0) return;
+    const min = 8; const max = 14;
+    const dir = (Math.random() > 0.5) ? 1 : -1;
+    spinInitVel = (Math.random() * (max - min) + min) * dir;
+    spinDuration = Math.random() * (15 - 10) + 10; // seconds
+    spinStart = null;
+    lastTime = 0;
+    animId = requestAnimationFrame((ts)=>{ spinStart = ts; animate(ts); });
+  }
 
-	// helpers
-	function wrapText(ctx, text, x, y, maxWidth, lineHeight){
-		const words = text.split(/\s+/);
-		let line = '';
-		let yOffset = 0;
-		for(let n=0;n<words.length;n++){
-			const testLine = line + (line ? ' ' : '') + words[n];
-			const metrics = ctx.measureText(testLine);
-			if(metrics.width > maxWidth && n>0){
-				ctx.fillText(line, x, y + yOffset);
-				line = words[n];
-				yOffset += lineHeight;
-			} else {
-				line = testLine;
-			}
-		}
-		ctx.fillText(line, x, y + yOffset);
-	}
+  function addGame(title){
+    const t = (title||'').trim();
+    if(!t) return;
+    games.push(t);
+    renderList(); draw(); input.value = ''; input.focus(); saveGames();
+  }
 
-	// tiny color shading helper
-	function shadeColor(hex, percent){
-		const c = hex.replace('#','');
-		const num = parseInt(c,16);
-		let r = (num >> 16) + percent;
-		let g = ((num >> 8) & 0x00FF) + percent;
-		let b = (num & 0x0000FF) + percent;
-		r = Math.max(Math.min(255,r),0);
-		g = Math.max(Math.min(255,g),0);
-		b = Math.max(Math.min(255,b),0);
-		return '#'+( (r<<16) | (g<<8) | b ).toString(16).padStart(6,'0');
-	}
+  function renderList(){
+    if(!gameList) return;
+    gameList.innerHTML = '';
+    games.forEach((g,i)=>{
+      const li = document.createElement('li');
+      li.textContent = g;
+      const remove = document.createElement('button');
+      remove.textContent = '✕'; remove.title = 'Remove'; remove.style.marginLeft = '8px';
+      remove.addEventListener('click', ()=>{ games.splice(i,1); renderList(); draw(); saveGames(); });
+      li.appendChild(remove);
+      gameList.appendChild(li);
+    });
+  }
 
-	// bindings
-	window.addEventListener('resize', resizeCanvas);
-	addForm.addEventListener('submit', (e)=>{
-		e.preventDefault();
-		addGame(input.value);
-	});
-	spinBtn.addEventListener('click', spin);
+  function saveGames(){ try{ localStorage.setItem('backlogGames', JSON.stringify(games)); } catch(e){} }
 
-	// export/import bindings
-	const exportBtn = document.getElementById('export-games');
-	const importBtn = document.getElementById('import-games');
-	const importFile = document.getElementById('import-file');
-	if(exportBtn) exportBtn.addEventListener('click', exportGames);
-	if(importBtn && importFile) importBtn.addEventListener('click', ()=> importFile.click());
-	if(importFile) importFile.addEventListener('change', (e)=>{
-		const f = e.target.files && e.target.files[0];
-		if(f) importGamesFromFile(f);
-		// reset input so the same file can be reselected later
-		e.target.value = '';
-	});
+  function exportGames(){
+    try{ const data = JSON.stringify(games, null, 2); const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'backlog-games.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); } catch(e){ console.warn('Export failed', e); }
+  }
 
-	// modal close behavior
-	if(closeModal && winnerModal){
-		closeModal.addEventListener('click', ()=>{
-			winnerModal.classList.remove('open');
-			winnerModal.style.display = 'none';
-			winnerModal.setAttribute('aria-hidden','true');
-		});
-		// close when clicking outside content
-		winnerModal.addEventListener('click', (e)=>{
-			if(e.target === winnerModal){
-				winnerModal.classList.remove('open');
-				winnerModal.style.display = 'none';
-				winnerModal.setAttribute('aria-hidden','true');
-			}
-		});
-		// close on Escape
-		document.addEventListener('keydown', (e)=>{
-			if(e.key === 'Escape' && winnerModal.classList.contains('open')){
-				winnerModal.classList.remove('open');
-				winnerModal.style.display = 'none';
-				winnerModal.setAttribute('aria-hidden','true');
-			}
-		});
-	}
+  function importGamesFromFile(file){
+    if(!file) return; const reader = new FileReader();
+    reader.onload = function(e){ try{ const parsed = JSON.parse(String(e.target.result)); if(Array.isArray(parsed)){ games = parsed.slice(); saveGames(); renderList(); draw(); } else { alert('Invalid file format: expected a JSON array of game titles.'); } } catch(err){ alert('Failed to read file: ' + (err && err.message ? err.message : 'unknown')); } };
+    reader.readAsText(file);
+  }
 
-	// initial render
-	renderList();
-	resizeCanvas();
-	// modal starts hidden (aria-hidden already set in markup)
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+    const words = text.split(/\s+/); let line = ''; let yOffset = 0;
+    for(let n=0;n<words.length;n++){ const testLine = line + (line ? ' ' : '') + words[n]; const metrics = ctx.measureText(testLine); if(metrics.width > maxWidth && n>0){ ctx.fillText(line, x, y + yOffset); line = words[n]; yOffset += lineHeight; } else { line = testLine; } }
+    ctx.fillText(line, x, y + yOffset);
+  }
+
+  function shadeColor(hex, percent){
+    const c = hex.replace('#',''); const num = parseInt(c,16);
+    let r = (num >> 16) + percent; let g = ((num >> 8) & 0x00FF) + percent; let b = (num & 0x0000FF) + percent;
+    r = Math.max(Math.min(255,r),0); g = Math.max(Math.min(255,g),0); b = Math.max(Math.min(255,b),0);
+    return '#'+( (r<<16) | (g<<8) | b ).toString(16).padStart(6,'0');
+  }
+
+  // bindings
+  window.addEventListener('resize', resizeCanvas);
+  if(addForm) addForm.addEventListener('submit', (e)=>{ e.preventDefault(); addGame(input.value); });
+  if(spinBtn) spinBtn.addEventListener('click', spin);
+
+  const exportBtn = document.getElementById('export-games');
+  const importBtn = document.getElementById('import-games');
+  const importFile = document.getElementById('import-file');
+  if(exportBtn) exportBtn.addEventListener('click', exportGames);
+  if(importBtn && importFile) importBtn.addEventListener('click', ()=> importFile.click());
+  if(importFile) importFile.addEventListener('change', (e)=>{ const f = e.target.files && e.target.files[0]; if(f) importGamesFromFile(f); e.target.value = ''; });
+
+  if(closeModal && winnerModal){
+    closeModal.addEventListener('click', ()=>{ winnerModal.classList.remove('open'); winnerModal.style.display = 'none'; winnerModal.setAttribute('aria-hidden','true'); });
+    winnerModal.addEventListener('click', (e)=>{ if(e.target === winnerModal){ winnerModal.classList.remove('open'); winnerModal.style.display = 'none'; winnerModal.setAttribute('aria-hidden','true'); } });
+    document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && winnerModal.classList.contains('open')){ winnerModal.classList.remove('open'); winnerModal.style.display = 'none'; winnerModal.setAttribute('aria-hidden','true'); } });
+  }
+
+  // initial
+  renderList(); resizeCanvas();
 
 })();
-
