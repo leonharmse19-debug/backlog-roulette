@@ -16,6 +16,7 @@
     <main>
       <section aria-labelledby="wheel-heading" class="wheel-section">
         <h2 id="wheel-heading">Roulette Wheel</h2>
+        <h3 id="wheel-warning">The wheel chooses your fate. Play the game, or suffer the consequences.</h3>
         <div class="canvas-wrap">
           <canvas id="wheel" width="600" height="600" role="img" aria-label="Game selection wheel">
             Your browser does not support the HTML5 Canvas element.
@@ -35,6 +36,12 @@
           <input id="game-input" name="game" type="text" placeholder="e.g. Hades" required />
           <button id="add-game" type="submit">Add</button>
         </form>
+
+        <div class="persist-controls" style="display:flex;gap:.5rem;align-items:center;justify-content:center;margin-top:.5rem;">
+          <button id="export-games" type="button">Export</button>
+          <button id="import-games" type="button">Import</button>
+          <input id="import-file" type="file" accept="application/json,.json" style="display:none" />
+        </div>
 
         <div class="list-wrap">
           <h3>Games</h3>

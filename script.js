@@ -1,7 +1,19 @@
 // Backlog Roulette - wheel drawing, spin animation, and UI bindings
 (function(){
 	const defaults = ['Witcher 3','Cyberpunk','Hades','Hollow Knight','Elden Ring','Stardew Valley'];
-	let games = [...defaults];
+	// Load saved games from localStorage if available, otherwise use defaults
+	let games;
+	try{
+		const saved = localStorage.getItem('backlogGames');
+		if(saved){
+			const parsed = JSON.parse(saved);
+			games = Array.isArray(parsed) ? parsed : [...defaults];
+		} else {
+			games = [...defaults];
+		}
+	} catch(e){
+		games = [...defaults];
+	}
 
 	const canvas = document.getElementById('wheel');
 	const ctx = canvas.getContext('2d');
@@ -195,6 +207,8 @@
 		draw();
 		input.value = '';
 		input.focus();
+		// persist new game
+		saveGames();
 	}
 
 	function renderList(){
@@ -210,10 +224,61 @@
 				games.splice(i,1);
 				renderList();
 				draw();
+				// persist removal
+				saveGames();
 			});
 			li.appendChild(remove);
 			gameList.appendChild(li);
 		});
+	}
+
+	// persist games array to localStorage
+	function saveGames(){
+		try{
+			localStorage.setItem('backlogGames', JSON.stringify(games));
+		}catch(e){
+			// ignore storage errors (e.g., quota or disabled)
+		}
+	}
+
+	// export games as JSON file for cross-PC transfer
+	function exportGames(){
+		try{
+			const data = JSON.stringify(games, null, 2);
+			const blob = new Blob([data], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'backlog-games.json';
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+		} catch(e){
+			console.warn('Export failed', e);
+		}
+	}
+
+	// import games from a JSON file (replaces current list)
+	function importGamesFromFile(file){
+		if(!file) return;
+		const reader = new FileReader();
+		reader.onload = function(e){
+			try{
+				const parsed = JSON.parse(String(e.target.result));
+				if(Array.isArray(parsed)){
+					games = parsed.slice();
+					saveGames();
+					renderList();
+					draw();
+				} else {
+					alert('Invalid file format: expected a JSON array of game titles.');
+				}
+			} catch(err){
+				alert('Failed to read file: ' + (err && err.message ? err.message : 'unknown'));
+			}
+		};
+		reader.readAsText(file);
 	}
 
 	// helpers
@@ -255,6 +320,19 @@
 		addGame(input.value);
 	});
 	spinBtn.addEventListener('click', spin);
+
+	// export/import bindings
+	const exportBtn = document.getElementById('export-games');
+	const importBtn = document.getElementById('import-games');
+	const importFile = document.getElementById('import-file');
+	if(exportBtn) exportBtn.addEventListener('click', exportGames);
+	if(importBtn && importFile) importBtn.addEventListener('click', ()=> importFile.click());
+	if(importFile) importFile.addEventListener('change', (e)=>{
+		const f = e.target.files && e.target.files[0];
+		if(f) importGamesFromFile(f);
+		// reset input so the same file can be reselected later
+		e.target.value = '';
+	});
 
 	// modal close behavior
 	if(closeModal && winnerModal){

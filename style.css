@@ -34,6 +34,24 @@ header .lead{color:var(--accent-2);margin:0;font-size:0.95rem}
 /* make headings and labels clearly visible */
 h2,h3,label{color:var(--text)}
 
+/* Ominous wheel warning */
+#wheel-warning{
+	width:100%;
+	margin:0;
+	padding:0.25rem 0 0.5rem 0;
+	text-align:center;
+	font-weight:800;
+	color:#ff6b6b; /* neon red tint */
+	letter-spacing:0.6px;
+	animation:pulse-neon 1.8s ease-in-out infinite;
+	text-shadow: 0 0 6px #ff6b6b, 0 0 16px #ff1a1a, 0 0 28px rgba(255,0,0,0.18);
+}
+
+@keyframes pulse-neon{
+	0%,100%{text-shadow: 0 0 4px #ff6b6b, 0 0 12px #ff1a1a, 0 0 24px rgba(255,0,0,0.18);}
+	50%{text-shadow: 0 0 10px #ff8b8b, 0 0 22px #ff2a2a, 0 0 44px rgba(255,0,0,0.32);}
+}
+
 main{
 	width:100%;
 	max-width:1100px;
